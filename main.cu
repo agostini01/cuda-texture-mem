@@ -31,7 +31,13 @@ surf_write(float *data, cudaExtent volumeSize)
 __global__ void
 tex_read(float x, float y, float z)
 {
-    printf("x: %f, y: %f, z:%f, val: %f\n", x, y, z, tex3D(volumeTexIn, x, y, z));
+    printf("texture: x: %f, y: %f, z:%f, val: %f\n", x, y, z, tex3D(volumeTexIn, x, y, z));
+}
+
+__global__ void
+regular_read(int x, int y, int z, float * array)
+{
+    printf("regular: x: %d, y: %d, z:%d, val: %f\n", x, y, z, array[x+y*8+z*64]);
 }
 
 void runtest(float *data, cudaExtent vol, float x, float y, float z)
@@ -43,10 +49,14 @@ void runtest(float *data, cudaExtent vol, float x, float y, float z)
     float *d_data;
     checkCudaErrors(cudaMalloc(&d_data, vol.width * vol.height * vol.depth * sizeof(float)));
     checkCudaErrors(cudaMemcpy(d_data, data, vol.width * vol.height * vol.depth * sizeof(float), cudaMemcpyHostToDevice));
+    
+    regular_read<<<1, 1>>>((int)x, (int)y, (int)z, d_data);
 
-    // dim3 blockSize(8, 8, 8);
+    dim3 blockSize(8, 8, 8);
     dim3 gridSize((vol.width+7)/8,(vol.height+7)/8, (vol.depth+7)/8);
     volumeTexIn.filterMode = cudaFilterModeLinear;
+    checkCudaErrors(cudaBindSurfaceToArray(volumeTexOut, content));
+    surf_write<<<gridSize, blockSize>>>(d_data,vol);
 
     checkCudaErrors(cudaBindTextureToArray(volumeTexIn, content));
     tex_read<<<1, 1>>>(x, y, z);
@@ -66,13 +76,15 @@ int main()
             for (int x = 0; x < dim; x++)
             {
                 data[z * dim * dim + y * dim + x] = z * 100 + y * 10 + x;
-                printf("x: %f, y: %f, z:%f, val: %f\n", x, y, z, data[z * dim * dim + y * dim + x]);
+
+                printf("x: %d, y: %d, z:%d, val: %f\n", 
+                    x, y, z, data[z * dim * dim + y * dim + x]);
             }
 
     cudaExtent vol = {dim, dim, dim};
     runtest(data, vol, 1.5, 1.5, 1.5);
     runtest(data, vol, 1.6, 1.6, 1.6);
-    runtest(data, vol, 10, 10, 10);
+    runtest(data, vol, 5, 5, 5);
 
     free(data);
     return 0;
