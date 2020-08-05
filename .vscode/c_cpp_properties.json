@@ -1,0 +1,18 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/shared/centos7/cuda/10.2/include/**",
+                "/shared/centos7/cuda/10.2/samples/common/inc"
+            ],
+            "defines": [],
+            "compilerPath": "/shared/centos7/gcc/6.4.0/bin/gcc",
+            "cStandard": "gnu11",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "clang-x64"
+        }
+    ],
+    "version": 4
+}
