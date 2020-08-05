@@ -34,7 +34,7 @@
 ################################################################################
 
 # Location of the CUDA Toolkit
-CUDA_PATH ?= /opt/cuda
+CUDA_PATH ?= /usr/local/cuda
 
 ##############################
 # start deprecated interface #
@@ -263,13 +263,13 @@ ALL_LDFLAGS += $(addprefix -Xlinker ,$(LDFLAGS))
 ALL_LDFLAGS += $(addprefix -Xlinker ,$(EXTRA_LDFLAGS))
 
 # Common includes and paths for CUDA
-INCLUDES  := -I/shared/centos7/cuda/10.2/samples/common/inc
+INCLUDES  := -I/usr/local/cuda/samples/common/inc -I/shared/centos7/cuda/10.2/samples/common/inc
 LIBRARIES :=
 
 ################################################################################
 
 # Gencode arguments
-SMS ?= 70
+SMS ?= 61
 
 ifeq ($(SMS),)
 $(info >>> WARNING - no SM architectures have been specified - waiving sample <<<)

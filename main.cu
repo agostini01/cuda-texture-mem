@@ -6,9 +6,9 @@
 
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
+#include <cuda_texture_types.h>
 
-texture<float, cudaTextureType3D, cudaReadModeElementType>
-    volumeTexIn;
+texture<float, cudaTextureType3D, cudaReadModeElementType> volumeTexIn;
 surface<void, 3> volumeTexOut;
 
 __global__ void
