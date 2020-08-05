@@ -5,7 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/shared/centos7/cuda/10.2/include/**",
-                "/shared/centos7/cuda/10.2/samples/common/inc"
+                "/shared/centos7/cuda/10.2/samples/common/inc/**"
             ],
             "defines": [],
             "compilerPath": "/shared/centos7/gcc/6.4.0/bin/gcc",
