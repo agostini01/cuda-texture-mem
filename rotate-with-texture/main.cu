@@ -7,7 +7,10 @@
 #include <iostream>
 #include <iomanip>
 
-void printArrayAsMatrix(const float* in, const size_t& width, const size_t& height) {
+#define PI_F 3.141592654f
+
+void printArrayAsMatrix(const float* in, 
+    const size_t& width, const size_t& height) {
   std::cout <<"Printing "<<width<<","<<height<<" array"<< std::endl;
   for (size_t j = 0; j < height; ++j) {
     for (size_t i = 0; i < width; ++i) {
@@ -20,10 +23,10 @@ void printArrayAsMatrix(const float* in, const size_t& width, const size_t& heig
   }
 }
 
-__global__ void transformKernel (float * output,
+__global__ void rotateKernel (float * output,
     cudaTextureObject_t texObj, int width, int height,
-    float theta)
-{
+    float theta) {
+
   // Calculate normalized texture coordinates
   unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
   unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -44,35 +47,19 @@ __global__ void transformKernel (float * output,
   output[idx] = tex2D<float>(texObj, tu, tv);
 }
 
-__global__ void rotateKernel(float* output, 
-    cudaTextureObject_t texObj, int width, int height, 
-    float theta)
-{
-  unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-  unsigned int j = blockIdx.y * blockDim.y + threadIdx.y;
-  unsigned int idx= j * width + i;
-
-  unsigned int xc = width - width/2;
-  unsigned int yc = height - height/2;
-  float newx = ((float)i-xc)*cosf(theta) - ((float)j-yc)*sinf(theta) + xc;
-  float newy = ((float)i-xc)*sinf(theta) + ((float)j-yc)*cosf(theta) + yc;
-  if (newx >= 0 && newx < width && newy >= 0 && newy < height) {
-    output[idx] = tex2D<float>(texObj, newx, newy);
-  }
-}
-
-
 int main () 
 {
   // Inputs
   size_t width = 16;
   size_t height = 16;
   size_t size = width * height * sizeof(float);
-  float angle = 0;
+  float angle = 90; // in degrees
+  float theta = angle/180*PI_F; // in rad
 
   // Initialize host array 
   float * h_data = (float*)malloc(size);
   for (int i =0; i<height*width; ++i) h_data[i] =(float)i/(height*width);
+  memset(h_data, 0, size/4);
 
   // cudaArray obj will have elements of 32bits, representing single-precision
   // floating point numbers
@@ -94,17 +81,15 @@ int main ()
   res_desc.res.array.array = cu_array;
 
   // Specify texture object parameters
-  // - Wrap mode: when outside of the boorderd, index x is converted to
-  //   frac(x)=x floor(x) with floor(x) is the largest integer 
-  //   not greater than x
-  // - With interpoation
+  // - Clamp mode: if out of bounds clamp index to closest 0 or width | 0 or height
+  // - Without interpoation
   // - No conversion/normalization of the value read
   // - Coordinates are normalized to -1,1: useful for trigonometry
   struct cudaTextureDesc tex_desc;
   memset(&tex_desc, 0, sizeof(tex_desc));
   tex_desc.addressMode[0]   = cudaAddressModeClamp;
   tex_desc.addressMode[1]   = cudaAddressModeClamp;
-  tex_desc.filterMode       = cudaFilterModeLinear;
+  tex_desc.filterMode       = cudaFilterModePoint;
   tex_desc.readMode         = cudaReadModeElementType;
   tex_desc.normalizedCoords = 1;
 
@@ -121,17 +106,14 @@ int main ()
 
   // Invoke kernel
   dim3 dimBlock(16, 16);
-  dim3 dimGrid((width  + dimBlock.x - 1) / dimBlock.x,
+  dim3 dimGrid(
+      (width  + dimBlock.x - 1) / dimBlock.x,
       (height + dimBlock.y - 1) / dimBlock.y);
-  //transformKernel<<<dimGrid, dimBlock>>>(d_output,
-  //    tex_obj, width, height,
-  //    angle);
   rotateKernel<<<dimGrid, dimBlock>>>(d_output,
       tex_obj, width, height,
-      angle);
+      theta);
 
   checkCudaErrors(cudaMemcpy(h_data, d_output, size, cudaMemcpyDeviceToHost));
-
 
   // Print host array
   printArrayAsMatrix(h_data, width, height);
@@ -142,6 +124,7 @@ int main ()
   // Free device memory
   checkCudaErrors(cudaFreeArray(cu_array));
   checkCudaErrors(cudaFree(d_output));
-  // Free other
+
+  // Free host memory
   free(h_data);
 }
