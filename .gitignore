@@ -1,4 +1,5 @@
 *o
 *.swp
 build/
-simpleTexture3D
+simpleTexture*
+rotate-with-texture/simpleTextureObject
