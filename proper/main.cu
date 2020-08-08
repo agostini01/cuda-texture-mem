@@ -12,7 +12,7 @@ texture<float, cudaTextureType3D, cudaReadModeElementType> volumeTexIn;
 surface<void, 3> volumeTexOut;
 
 __global__ void
-surf_write(float *data, cudaExtent volumeSize)
+surf_write(float *data, cudaExtent volumeSize, float offset)
 {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -25,7 +25,7 @@ surf_write(float *data, cudaExtent volumeSize)
 
     float output = data[z * (volumeSize.width * volumeSize.height) + y * (volumeSize.width) + x];
 
-    surf3Dwrite(output, volumeTexOut, x * sizeof(float), y, z);
+    surf3Dwrite(output + offset, volumeTexOut, x * sizeof(float), y, z);
 }
 
 __global__ void
@@ -52,14 +52,29 @@ void runtest(float *data, cudaExtent vol, float x, float y, float z)
     
     regular_read<<<1, 1>>>((int)x, (int)y, (int)z, d_data);
 
+    // Binding the texture and surface
+    checkCudaErrors(cudaBindSurfaceToArray(volumeTexOut, content));
+    checkCudaErrors(cudaBindTextureToArray(volumeTexIn, content));
+
     dim3 blockSize(8, 8, 8);
     dim3 gridSize((vol.width+7)/8,(vol.height+7)/8, (vol.depth+7)/8);
-    volumeTexIn.filterMode = cudaFilterModeLinear;
-    checkCudaErrors(cudaBindSurfaceToArray(volumeTexOut, content));
-    surf_write<<<gridSize, blockSize>>>(d_data,vol);
+    surf_write<<<gridSize, blockSize>>>(d_data,vol, 0);
 
-    checkCudaErrors(cudaBindTextureToArray(volumeTexIn, content));
+    volumeTexIn.filterMode = cudaFilterModePoint; // Non interpolated
     tex_read<<<1, 1>>>(x, y, z);
+    
+    volumeTexIn.filterMode = cudaFilterModeLinear; // Interpolated
+    tex_read<<<1, 1>>>(x, y, z);
+    
+    surf_write<<<gridSize, blockSize>>>(d_data,vol, 42);
+    
+    volumeTexIn.filterMode = cudaFilterModePoint; // Non interpolated
+    tex_read<<<1, 1>>>(x, y, z);
+    
+    volumeTexIn.filterMode = cudaFilterModeLinear; // Interpolated
+    tex_read<<<1, 1>>>(x, y, z);
+    
+    
     checkCudaErrors(cudaDeviceSynchronize());
 
     cudaFreeArray(content);
@@ -77,13 +92,13 @@ int main()
             {
                 data[z * dim * dim + y * dim + x] = z * 100 + y * 10 + x;
 
-                printf("x: %d, y: %d, z:%d, val: %f\n", 
-                    x, y, z, data[z * dim * dim + y * dim + x]);
+                // printf("x: %d, y: %d, z:%d, val: %f\n", 
+                //     x, y, z, data[z * dim * dim + y * dim + x]);
             }
 
     cudaExtent vol = {dim, dim, dim};
     runtest(data, vol, 1.5, 1.5, 1.5);
-    runtest(data, vol, 1.6, 1.6, 1.6);
+    runtest(data, vol, 1.9, 1.9, 1.9);
     runtest(data, vol, 5, 5, 5);
 
     free(data);
