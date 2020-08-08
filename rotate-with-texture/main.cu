@@ -9,8 +9,12 @@
 
 #define PI_F 3.141592654f
 
+#define DEBUG 1
+//undef DEBUG
+
 void printArrayAsMatrix(const float* in, 
     const size_t& width, const size_t& height) {
+#ifdef DEBUG
   std::cout <<"Printing "<<width<<","<<height<<" array"<< std::endl;
   for (size_t j = 0; j < height; ++j) {
     for (size_t i = 0; i < width; ++i) {
@@ -21,6 +25,7 @@ void printArrayAsMatrix(const float* in,
     }
     std::cout << std::endl;
   }
+#endif
 }
 
 __global__ void rotateKernel (float * output,
@@ -93,9 +98,14 @@ int main ()
   tex_desc.readMode         = cudaReadModeElementType;
   tex_desc.normalizedCoords = 1;
 
+  // Copy host memory to cudaArray
+  checkCudaErrors(cudaMemcpyToArray(cu_array, 0, 0, h_data, size,
+      cudaMemcpyHostToDevice));
+
   // Create texture object
   cudaTextureObject_t tex_obj = 0;
   cudaCreateTextureObject(&tex_obj, &res_desc, &tex_desc, NULL);
+  
 
   // Allocate result of transformation in device memory
   float* d_output;
@@ -104,7 +114,7 @@ int main ()
   // Print host array
   printArrayAsMatrix(h_data, width, height);
 
-  // Invoke kernel
+  // Invoke kernel rotating it once
   dim3 dimBlock(16, 16);
   dim3 dimGrid(
       (width  + dimBlock.x - 1) / dimBlock.x,
@@ -112,10 +122,20 @@ int main ()
   rotateKernel<<<dimGrid, dimBlock>>>(d_output,
       tex_obj, width, height,
       theta);
-
+  
+  // Print result array
   checkCudaErrors(cudaMemcpy(h_data, d_output, size, cudaMemcpyDeviceToHost));
-
-  // Print host array
+  printArrayAsMatrix(h_data, width, height);
+  
+  // Copy old result to texture and Invoke kernel rotating it again
+  checkCudaErrors(cudaMemcpyToArray(cu_array, 0, 0, d_output, size,
+      cudaMemcpyDeviceToDevice));
+  rotateKernel<<<dimGrid, dimBlock>>>(d_output,
+      tex_obj, width, height,
+      theta);
+  
+  // Print result array
+  checkCudaErrors(cudaMemcpy(h_data, d_output, size, cudaMemcpyDeviceToHost));
   printArrayAsMatrix(h_data, width, height);
 
   // Destroy texture object
