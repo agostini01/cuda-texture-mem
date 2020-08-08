@@ -1,5 +1,5 @@
 // adapted from:
-// http://turing.une.edu.au/~cosc330/lectures/lecture_19/examples/simpleTexture.cu
+// The docs
 
 #include <stdio.h>
 #include <helper_cuda.h>
