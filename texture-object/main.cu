@@ -5,9 +5,21 @@
 #include <numeric>
 #include <vector>
 #include <iostream>
+#include <iomanip>
 
+void printArrayAsMatrix(const float* in, const size_t& width, const size_t& height) {
+  for (size_t j = 0; j < height; ++j) {
+    for (size_t i = 0; i < width; ++i) {
+      std::cout <<std::fixed 
+        << std::setw(5) // space between numbers
+        << std::setprecision(2) // nubmers after decimal point
+        << in[width*j + i] << ' ';
+    }
+    std::cout << std::endl;
+  }
+}
 
-__global__ void transformKernel (float * output,
+__global__ void transformKernel (float * d_output,
     cudaTextureObject_t texObj,
     int width, int height,
     float theta)
@@ -23,14 +35,16 @@ __global__ void transformKernel (float * output,
   unsigned int idx= y * width + x;
 
   // Transform coordinates
-  u -= 0.5f;
-  v -= 0.5f;
-  float tu = u * cosf(theta) - v * sinf(theta) + 0.5f;
-  float tv = v * cosf(theta) + u * sinf(theta) + 0.5f;
+  u -= 0.0f;
+  v -= 0.0f;
+  float tu = u * cosf(theta) - v * sinf(theta) + 0.0f;
+  float tv = v * cosf(theta) + u * sinf(theta) + 0.0f;
   // Read from texture and write to global memory
-  output[idx] = tex2D<float>(texObj, tu, tv);
+  d_output[idx] = tex2D<float>(texObj, tu, tv);
   
-  if(idx==10) printf("%f\n", output[idx]);
+  if(idx==10) printf("%d\n", idx);
+  if(idx==10) printf("%f,%f\n", tu,tv);
+  if(idx==10) printf("%f\n", d_output[idx]);
   if(idx==10) printf("%f\n", tex2D<float>(texObj, tu, tv));
 
 }
@@ -40,15 +54,14 @@ __global__ void transformKernel (float * output,
 int main () 
 {
   // Inputs
-  size_t width = 128;
-  size_t height = 128;
+  size_t width = 16;
+  size_t height = 16;
   size_t size = width * height * sizeof(float);
   float angle = 0;
 
   // Initialize host array 
-  std::vector<int> h_data(width*height);
-  std::iota(h_data.begin(), h_data.end(), 0); // vector with increasing integers
-  
+  float * h_data = (float*)malloc(size);
+  for (int i =0; i<height*width; ++i) h_data[i] =(float)i/(height*width);
 
   // cudaArray obj will have elements of 32bits, representing single-precision
   // floating point numbers
@@ -59,7 +72,7 @@ int main ()
   cudaArray* cu_array;
   checkCudaErrors(cudaMallocArray(&cu_array, &ch_desc, width, height));
 
-  checkCudaErrors(cudaMemcpyToArray(cu_array, 0, 0, h_data.data(), size,
+  checkCudaErrors(cudaMemcpyToArray(cu_array, 0, 0, h_data, size,
       cudaMemcpyHostToDevice));
 
   // Specify texture
@@ -89,35 +102,32 @@ int main ()
   cudaCreateTextureObject(&tex_obj, &res_desc, &tex_desc, NULL);
 
   // Allocate result of transformation in device memory
-  float* output;
-  checkCudaErrors(cudaMalloc(&output, size));
+  float* d_output;
+  checkCudaErrors(cudaMalloc(&d_output, size));
   
-  // Print input and output elements
-  for (int i =10; i<15; ++i)
-    std::cout << "("<<i<<","<<h_data[i]<<") ";
-  std::cout<<std::endl;
+  // Print host array
+  printArrayAsMatrix(h_data, width, height);
 
   // Invoke kernel
   dim3 dimBlock(16, 16);
   dim3 dimGrid((width  + dimBlock.x - 1) / dimBlock.x,
       (height + dimBlock.y - 1) / dimBlock.y);
-  transformKernel<<<dimGrid, dimBlock>>>(output,
+  transformKernel<<<dimGrid, dimBlock>>>(d_output,
       tex_obj, width, height,
       angle);
 
-  checkCudaErrors(cudaMemcpy(h_data.data(), output, size, cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(h_data, d_output, size, cudaMemcpyDeviceToHost));
 
 
-  // Print input and output elements
-  for (int i =10; i<15; ++i)
-    std::cout << "("<<i<<","<<h_data[i]<<") ";
-  std::cout<<std::endl;
-
+  // Print host array
+  printArrayAsMatrix(h_data, width, height);
 
   // Destroy texture object
   checkCudaErrors(cudaDestroyTextureObject(tex_obj));
 
   // Free device memory
   checkCudaErrors(cudaFreeArray(cu_array));
-  checkCudaErrors(cudaFree(output));
+  checkCudaErrors(cudaFree(d_output));
+  // Free other
+  free(h_data);
 }
